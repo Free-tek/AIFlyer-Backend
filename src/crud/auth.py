@@ -154,18 +154,21 @@ class AuthCrud:
             # Debug logging
             logger.info(f"Raw user_data: {user_data}")
             
-            # Get applications directly since it's already a list
-            applications = user_data.get('applications', [])
+            # Convert applications from map to list if it exists
+            applications = user_data.get('applications', {})
+            application_ids = user_data.get('application_ids', [])
             
-            # Ensure it's a list
-            if not isinstance(applications, list):
-                applications = []
+            # Convert the applications map to a list using application_ids for order
+            applications_list = []
+            for app_id in application_ids:
+                if app_id in applications:
+                    app_data = applications[app_id]
+                    # Ensure application_id is included in the data
+                    app_data['application_id'] = app_id
+                    applications_list.append(app_data)
             
-            # Debug logging
-            logger.info(f"Final applications list: {applications}")
-            
-            # Update the applications in user_data
-            user_data['applications'] = applications
+            # Update the applications in user_data with the ordered list
+            user_data['applications'] = applications_list
             
             return user_data
         except Exception as e:
