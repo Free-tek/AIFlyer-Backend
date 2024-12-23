@@ -18,13 +18,13 @@ def decode_base_64_to_json(base64_string: str):
 
 cred = credentials.Certificate(decode_base_64_to_json(settings.GOOGLE_CONFIG_BASE64))
 firebase_admin.initialize_app(cred
-    # , { 'storageBucket': settings.STORAGE_BUCKET }
+    , { 'storageBucket': settings.STORAGE_BUCKET }
     )
 
 db = firestore.client()
 
 users_data_ref = db.collection("users_data")
+flyers_data_ref = db.collection('flyers')
 
 # bucket = storage.bucket()
-
 

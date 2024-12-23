@@ -86,7 +86,8 @@ class BillingCrud:
                         "created_at": current_time.isoformat()
                     },
                     "stripe_customer_id": customer_id
-                }
+                },
+                "plan_tier": plan_tier
             }, merge=True)
 
             logger.info(f"Updated user {user_id} with Stripe customer ID {customer_id} and plan {plan_tier}")
@@ -138,7 +139,8 @@ class BillingCrud:
                         "image_limit": image_limits.get(customer_data['plan_tier'], 0),
                         "plan_tier": customer_data['plan_tier'],
                     }
-                }
+                },
+                "plan_tier": customer_data['plan_tier']
             }, merge=True)
 
 
@@ -179,7 +181,8 @@ class BillingCrud:
                 f"stripe_customers.{customer_id}.image_limit": 0,
                 f"stripe_customers.{customer_id}.payment_failed": True,
                 f"stripe_customers.{customer_id}.payment_failure_reason": failure_message,
-                f"stripe_customers.{customer_id}.payment_failed_at": payment_failed_at
+                f"stripe_customers.{customer_id}.payment_failed_at": payment_failed_at,
+                "plan_tier": PlanTier.FREE.value
             })
 
             logger.warning(
