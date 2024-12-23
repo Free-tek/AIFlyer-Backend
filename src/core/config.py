@@ -8,8 +8,7 @@ from pydantic_settings import BaseSettings
 path = Path.cwd()
 
 env_path = path / ".env"
-
-load_dotenv(dotenv_path=env_path)
+load_dotenv(dotenv_path=env_path, override=True)
 
 ENVIRONMENT = os.environ.get("ENVIRONMENT", "DEVELOPMENT")
 
@@ -46,8 +45,10 @@ elif ENVIRONMENT == "DEVELOPMENT" or ENVIRONMENT == "LOCAL":
     smtp_username: str = os.environ.get("SMTP_USERNAME", None)
     smtp_password: str = os.environ.get("SMTP_PASSWORD", None)
     sender_email: str = os.environ.get("SENDER_EMAIL", None)
+
 else:
     pass
+
 
 
 class Settings(BaseSettings):

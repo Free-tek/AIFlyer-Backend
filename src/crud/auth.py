@@ -111,36 +111,80 @@ class AuthCrud:
             response = {"id": user_id, "message": "User details updated successfully"}
             
             # If there's an application in the data
-            if 'application' in data:
-                applications = data.pop('applications')  # This will be a list
+            if 'applications' in data:
+                applications = data['applications']
                 
-                # Ensure we have at least one application
                 if not applications or not isinstance(applications, list):
                     raise ValueError("Invalid application data format")
                     
-                application = applications[0]  # Take the first application from the list
+                application = applications[0]
+                application_type = application.get('application_type', 'business')
+                application_data = application.get('application_data', {})
                 
                 # Generate application_id for new applications
-                if not application.get('application_id'):
-                    application['application_id'] = str(uuid.uuid4())
-                    
-                # Update/Create specific application using application_id as key
+                application_id = str(uuid.uuid4())
+                
+                # Base application data structure with common fields
+                base_application_data = {
+                    "logo": application_data.get("logo"),
+                    "primary_color": application_data.get("primary_color"),
+                    "secondary_color": application_data.get("secondary_color"),
+                    "twitter_handle": application_data.get("twitter_handle"),
+                    "facebook_handle": application_data.get("facebook_handle"),
+                    "instagram_handle": application_data.get("instagram_handle"),
+                    "linkedin_handle": application_data.get("linkedin_handle"),
+                    "tiktok_handle": application_data.get("tiktok_handle"),
+                    "pinterest_handle": application_data.get("pinterest_handle"),
+                    "youtube_handle": application_data.get("youtube_handle"),
+                    "llm_memory": application_data.get("llm_memory")
+                }
+
+                # Add type-specific fields based on application_type
+                if application_type == "business":
+                    base_application_data.update({
+                        "business_name": application_data.get("business_name"),
+                        "business_description": application_data.get("business_description"),
+                        "website_url": application_data.get("website_url")
+                    })
+                elif application_type == "event":
+                    base_application_data.update({
+                        "event_name": application_data.get("event_name"),
+                        "event_description": application_data.get("event_description"),
+                        "event_date": application_data.get("event_date"),
+                        "event_location": application_data.get("event_location"),
+                        "event_images": application_data.get("event_images", [])
+                    })
+                elif application_type == "other":
+                    base_application_data.update({
+                        "other_name": application_data.get("other_name"),
+                        "other_description": application_data.get("other_description"),
+                        "website_url": application_data.get("website_url")
+                    })
+                
+                # Update/Create specific application
                 users_data_ref.document(user_id).set({
                     "applications": {
-                        application['application_id']: application  # Use application_id as the key
+                        application_id: {
+                            "application_id": application_id,
+                            "application_type": application_type,
+                            "application_data": base_application_data,
+                            "created_at": datetime.now().isoformat()
+                        }
                     },
-                    "application_ids": firestore.ArrayUnion([application['application_id']])  # Add to ordered list
+                    "application_ids": firestore.ArrayUnion([application_id])
                 }, merge=True)
                 
-                # Add application_id to response
-                response["application_id"] = application['application_id']
+                response["application_id"] = application_id
                 
             # Update other user details if any
             if data:
-                users_data_ref.document(user_id).set(data, merge=True)
+                other_data = {k: v for k, v in data.items() if k != 'applications'}
+                if other_data:
+                    users_data_ref.document(user_id).set(other_data, merge=True)
                 
             return response
         except Exception as e:
+            logger.error(f"Error in update_user_details: {str(e)}")
             return {"error": f"Failed to update user details: {str(e)}"}
                     
     def get_user_details(user_id: str):
@@ -151,24 +195,28 @@ class AuthCrud:
             
             user_data = user_doc.to_dict()
             
-            # Debug logging
-            logger.info(f"Raw user_data: {user_data}")
-            
-            # Convert applications from map to list if it exists
-            applications = user_data.get('applications', {})
-            application_ids = user_data.get('application_ids', [])
-            
-            # Convert the applications map to a list using application_ids for order
-            applications_list = []
-            for app_id in application_ids:
-                if app_id in applications:
-                    app_data = applications[app_id]
-                    # Ensure application_id is included in the data
-                    app_data['application_id'] = app_id
-                    applications_list.append(app_data)
-            
-            # Update the applications in user_data with the ordered list
-            user_data['applications'] = applications_list
+            # Process applications if they exist
+            if 'applications' in user_data:
+                applications_dict = user_data['applications']
+                applications_list = []
+                
+                # Convert applications dict to list and ensure proper structure
+                for app_id, app_data in applications_dict.items():
+                    application = {
+                        "application_id": app_id,
+                        "application_type": app_data.get("application_type", "business"),
+                        "application_data": app_data.get("application_data", {}),
+                        "created_at": app_data.get("created_at")
+                    }
+                    applications_list.append(application)
+                
+                # Sort applications by creation date if available
+                applications_list.sort(
+                    key=lambda x: x.get("created_at", ""),
+                    reverse=True
+                )
+                
+                user_data['applications'] = applications_list
             
             return user_data
         except Exception as e:
