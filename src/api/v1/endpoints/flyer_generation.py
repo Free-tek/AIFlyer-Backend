@@ -41,6 +41,7 @@ async def create_flyer(
 ):
     """Create a new flyer"""
 
+
     flyer_model = await generator.generate_flyer(flyer_in, user_id)
     if type(flyer_model) == FlyerModel:
         if flyer_in.flyer_description:

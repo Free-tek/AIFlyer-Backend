@@ -7,7 +7,7 @@ from datetime import datetime
 from src.core.model_manager import get_claude_client
 from src.model.flyer_model import FlyerCreate, FlyerModel, FlyerConversation, Role, FlyerDesignQuery, FlyerDesignFile
 from src.crud.flyer_generation import flyer_crud
-from src.utils.prompts import generate_marketing_content_prompt, generate_image_query_prompt, generate_initial_design_prompt, generate_refine_design_prompt, classify_intent_prompt, reformat_design_size_prompt
+from src.utils.prompts import generate_marketing_content_prompt, generate_image_query_prompt, generate_initial_design_prompt, generate_refine_design_prompt, classify_intent_prompt, reformat_design_size_prompt, layout_options
 from src.crud.auth import AuthCrud
 from firebase_admin import storage, firestore
 from playwright.async_api import async_playwright
@@ -240,7 +240,7 @@ class ConversationalFlyerGenerator:
         """Generate the initial flyer design"""
         print(business_details)
         print(image_url)
-        prompt = generate_initial_design_prompt(business_details, image_url, other_images)
+        prompt = generate_initial_design_prompt(business_details, image_url, other_images, layout_options["card_layout"])
         
         response = await self.client.messages.create(
             model="claude-3-opus-20240229",
@@ -290,6 +290,7 @@ class ConversationalFlyerGenerator:
                         "role": conv['role'].lower(),
                         "content": conv['message']
                     })
+
 
             # Get AI response with retries
             response = await self._get_ai_response(system_prompt, messages)
@@ -455,21 +456,21 @@ class ConversationalFlyerGenerator:
                 flyer = await self.generate_flyer(flyer_in, user_id)
                 response_data = {
                     "flyer": flyer.model_dump() if hasattr(flyer, 'model_dump') else flyer,
-                    "message": "New marketing idea generated"
+                    "message": "I have generated a new marketing idea for you"
                 }
 
             elif "REFINE_DESIGN" in intent:
                 flyer = await self.refine_design(user_input, user_id, flyer_id)
                 response_data = {
                     "flyer": flyer.model_dump() if hasattr(flyer, 'model_dump') else flyer,
-                    "message": "Design refined based on feedback"
+                    "message": "I have made the changes to the design based on your feedback"
                 }
 
             elif "UPDATE_DESIGN_IMAGE" in intent:
                 flyer = await self.update_design_image(user_id, flyer_id, image_url, user_input)
                 response_data = {
                     "flyer": flyer.model_dump() if hasattr(flyer, 'model_dump') else flyer,
-                    "message": "Design image updated"
+                    "message": "I have updated the design image based on your feedback"
                 }
 
             elif "EXIT" in intent:
@@ -641,22 +642,89 @@ class ConversationalFlyerGenerator:
                             # Set viewport to exact size
                             await page.set_viewport_size({"width": width, "height": height})
                             
-                            # Additional CSS to remove white space and container border radius only
+                            # Add more comprehensive CSS to remove all white space and ensure full bleed
                             await page.add_style_tag(content="""
-                                body {
-                                    margin: 0;
-                                    padding: 0;
-                                    overflow: hidden;
+                                * {
+                                    margin: 0 !important;
+                                    padding: 0 !important;
+                                    box-sizing: border-box !important;
+                                    border-radius: 0 !important;
+                                    -webkit-border-radius: 0 !important;
+                                    -moz-border-radius: 0 !important;
                                 }
+                                
+                                html, body {
+                                    margin: 0 !important;
+                                    padding: 0 !important;
+                                    overflow: hidden !important;
+                                    width: 100% !important;
+                                    height: 100% !important;
+                                    background: transparent !important;
+                                    display: block !important;
+                                }
+                                
                                 .container {
                                     margin: 0 !important;
+                                    padding: 0 !important;
                                     border-radius: 0 !important;
+                                    position: absolute !important;
+                                    top: 0 !important;
+                                    left: 0 !important;
+                                    right: 0 !important;
+                                    bottom: 0 !important;
+                                    width: 100% !important;
+                                    height: 100% !important;
+                                    box-shadow: none !important;
+                                    overflow: hidden !important;
+                                    display: flex !important;
+                                }
+                                
+                                .content-area {
+                                    padding: 60px !important;
+                                    width: 42% !important;
+                                    position: relative !important;
+                                    z-index: 2 !important;
+                                }
+                                
+                                .image-section {
+                                    position: absolute !important;
+                                    right: 0 !important;
+                                    top: 0 !important;
+                                    width: 60% !important;
+                                    height: 100% !important;
+                                    z-index: 1 !important;
+                                }
+                                
+                                .bg-image, img {
+                                    object-fit: cover !important;
+                                    width: 100% !important;
+                                    height: 100% !important;
+                                    border-radius: 0 !important;
+                                    display: block !important;
+                                }
+                                
+                                .button, .btn, a {
+                                    border-radius: 0 !important;
+                                    display: inline-block !important;
+                                    text-decoration: none !important;
+                                }
+                                
+                                .social-media-bar {
+                                    border-radius: 0 !important;
+                                    display: flex !important;
+                                    align-items: center !important;
+                                }
+                                
+                                .logo {
+                                    position: absolute !important;
+                                    z-index: 3 !important;
                                 }
                             """)
                             
                             await page.goto(f"file://{temp_html}")
                             await page.wait_for_load_state("networkidle")
                             
+                            # Take screenshot with exact dimensions and no padding
                             await page.screenshot(
                                 path=temp_jpg,
                                 type='jpeg',
@@ -666,7 +734,8 @@ class ConversationalFlyerGenerator:
                                     "y": 0,
                                     "width": width,
                                     "height": height
-                                }
+                                },
+                                omit_background=True  # This helps remove any background color
                             )
                             
                             await browser.close()

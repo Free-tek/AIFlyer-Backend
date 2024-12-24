@@ -93,7 +93,7 @@ class FlyerCRUD:
         """Get all flyers for a user"""
         try:
             flyers = self.flyers_data_ref.document(user_id).collection("flyers").get()
-            print(f"this is the flyers: {flyers}")
+            # print(f"this is the flyers: {flyers}")
             
             return [{**flyer.to_dict(), "flyer_id": flyer.id} for flyer in flyers]
 
