@@ -105,7 +105,7 @@ class ConversationalFlyerGenerator:
             if flyer_in.thumbnail_type == ThumbnailType.TIKTOK:
                 layout_option = random.choice(["tiktok_thumbnail_layout_1", "tiktok_thumbnail_layout_2"])
             else:
-                layout_option = "youtube_thumbnail_layout_"
+                layout_option = "youtube_thumbnail_layout_1"
 
             html_content = await self.generate_thumbnail_design(flyer_in.flyer_description, image_url, layout_option)
             print(html_content)
@@ -275,10 +275,10 @@ class ConversationalFlyerGenerator:
             sample_image_url = "https://firebasestorage.googleapis.com/v0/b/flyerai.firebasestorage.app/o/sandbox%20files%2FWhatsApp%20Image%202024-12-28%20at%201.22.49%20AM%20(1).jpeg?alt=media&token=77d5cd46-8822-4777-8be2-824ff4b04a42"
             sample_image_type = "image/jpeg"
         elif layout_option == "youtube_thumbnail_layout_1":
-            sample_image_url = "https://firebasestorage.googleapis.com/v0/b/flyerai.firebasestorage.app/o/sandbox%20files%2FScreenshot%202024-12-26%20at%205.21.16%E2%80%AFPM.png?alt=media&token=826e745e-d159-4b59-b426-261df68c143e"
-            sample_image_type = "image/png"
+            sample_image_url = "https://firebasestorage.googleapis.com/v0/b/flyerai.firebasestorage.app/o/sandbox%20files%2FBlock-Heading-Falling-Cash-Template-youtube-thumbnail.jpg?alt=media&token=eeb12e55-77b7-48bf-8629-3b2541c2dd55"
+            sample_image_type = "image/jpeg"
         elif layout_option == "youtube_thumbnail_layout_2":
-            sample_image_url = ""
+            sample_image_url = "https://firebasestorage.googleapis.com/v0/b/flyerai.firebasestorage.app/o/sandbox%20files%2FBlock-Heading-Falling-Cash-Template-youtube-thumbnail.jpg?alt=media&token=eeb12e55-77b7-48bf-8629-3b2541c2dd55"
             sample_image_type = "image/jpeg"
 
         # Download the image and convert to base64

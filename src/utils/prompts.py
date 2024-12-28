@@ -2009,48 +2009,81 @@ thumbnail_layout_options = {
     "youtube_thumbnail_layout_1": {
         "layout_size": "1280px × 720px",
         "layout": """
-            Youtube Thumbnail Layout
-            
+            YouTube Thumbnail Layout
+
             1. CONTAINER STRUCTURE
                 - Dimensions: 1280px × 720px
-                - Background: Video screenshot/image
-                
-            2. TEXT HIERARCHY
-                Main Text:
-                - Font: Inter Black or similar
-                - Size: 72-84px for short text, scale down for longer
-                - Weight: 800-900
-                - Color: White with black shadow
-                - Position: 65-70% from top
-                
-                Highlight Text (Optional):
-                - Background: Solid bright color (#FF0040 recommended)
-                - Padding: 8px 20px
-                - Rotation: -2deg
-                - Box Shadow: 4px 4px rgba(0,0,0,0.3)
-                
-            3. EMOJI PLACEMENT
-                - Inline Emojis: Same size as text
-                - Text Emojis: After or between words
-            
-                
-                
+                - Background: Full video screenshot/image
+                - No overlays or filters on background image
+                - Image must be clearly visible
+
+            2. TEXT POSITIONING
+                Primary Layout Zones:
+                - Right side text alignment (40-50% width)
+                - Left side clear for background focus
+                - Maintain 40px minimum edge spacing
+                - Stack text blocks vertically with 8px gaps
+
+            3. TEXT BLOCKS
+                Structure:
+                - Solid color background blocks behind all text
+                - Padding: 10px 25px for each block
+                - Box-shadow for subtle depth
+                - Sharp, clean edges
+
+                Color Rules:
+                - Use vibrant, saturated colors (no black/white/grey)
+                - Background colors: Deep, rich tones (#2C0066, #1A0044)
+                - Text colors: Bright, popping shades (#00FFDD, #FFE249, #FF47B6)
+                - Maintain high contrast between text and background
+
+            4. TEXT HIERARCHY
+                Main Text (Largest):
+                - Font: Anton or similar ultra-bold font
+                - Size: 130-140px
+                - Weight: 800+
+                - Use for numbers/money amounts
+
+                Secondary Text:
+                - Size: 90-100px
+                - Weight: 800+
+                - Use for main action/topic
+
+                Supporting Text:
+                - Size: 60-70px
+                - Weight: 800+
+                - Use for additional info
+
+            5. SPACING & ALIGNMENT
+                - Right-align all text blocks
+                - Consistent vertical spacing (8px between blocks)
+                - No random rotations or angles
+                - Clean, structured layout
+
             ❌ FORBIDDEN:
-            - Centered text alignments for long phrases
-            - More than 3 lines of text
-            - Small or unreadable text
-            - Missing contrast overlay
-            - Emoji overload (max 4 total)
-            
+            - Overlays on background image
+            - Black or white colored blocks
+            - Gradient effects
+            - Centered text placement
+            - Mixed text alignments
+            - Rotated or skewed text
+            - Grey scale colors
+            - Text directly on image
+            - More than 3 text blocks
+            - Transparent backgrounds
+
             ✅ REQUIRED:
-            - High contrast text
-            - Strategic emoji placement
-            - Clear hierarchy
-            - Gen-Z friendly styling
-            - Proper spacing around elements
-            - Full clear background image without overlays or gradients
+            - Solid color blocks behind all text
+            - Vibrant color combinations
+            - Right-side text alignment
+            - Clean vertical stacking
+            - Full visibility of background image
+            - Maximum 3 text elements
+            - Consistent text block styling
+            - Sharp edges and corners
+            - High contrast color pairs
         """,
-        "usage_and_description": "TikTok thumbnail layout optimized for maximum engagement and readability, featuring bold text and strategic emoji placement."
+        "usage_and_description": "Professional YouTube thumbnail layout optimized for maximum impact and readability, featuring bold text blocks with vibrant colors and clean right-side alignment. Perfect for gaming, challenge, or announcement videos where numbers or text need to stand out."
     }
 }
 
