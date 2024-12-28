@@ -28,6 +28,7 @@ if ENVIRONMENT == "PRODUCTION":
     smtp_username: str = os.environ.get("SMTP_USERNAME", None)
     smtp_password: str = os.environ.get("SMTP_PASSWORD", None)
     sender_email: str = os.environ.get("SENDER_EMAIL", None)
+    freepik_api_key: str = os.environ.get("FREEPIK_API_KEY", None)
     pass
 
 elif ENVIRONMENT == "DEVELOPMENT" or ENVIRONMENT == "LOCAL":
@@ -45,7 +46,7 @@ elif ENVIRONMENT == "DEVELOPMENT" or ENVIRONMENT == "LOCAL":
     smtp_username: str = os.environ.get("SMTP_USERNAME", None)
     smtp_password: str = os.environ.get("SMTP_PASSWORD", None)
     sender_email: str = os.environ.get("SENDER_EMAIL", None)
-
+    freepik_api_key: str = os.environ.get("FREEPIK_API_KEY", None)
 else:
     pass
 
@@ -70,5 +71,6 @@ class Settings(BaseSettings):
     SMTP_USERNAME: str = smtp_username
     SMTP_PASSWORD: str = smtp_password
     SENDER_EMAIL: str = sender_email
+    FREEPIK_API_KEY: str = freepik_api_key
 
 settings = Settings()

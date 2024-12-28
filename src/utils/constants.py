@@ -1,0 +1,1 @@
+FREEPIK_API_URL = "https://api.freepik.com/v1/icons"

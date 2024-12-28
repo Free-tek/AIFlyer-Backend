@@ -4,7 +4,7 @@ from enum import Enum
 
 class FlyerType(Enum):
     GENERAL = "general"
-    TIKTOK = "tiktok"
+    THUMBNAIL = "thumbnail"
     GIF = "gif"
 
 class Role(Enum):
@@ -20,6 +20,15 @@ class FlyerSizes(Enum):
     PINTEREST = "1000x1500"
     YOUTUBE = "1280x720"
 
+class ThumbnailSizes(Enum):
+    YOUTUBE = "1280x720"
+    TIKTOK = "1080x1920"
+
+class ThumbnailType(Enum):
+    YOUTUBE = "youtube"
+    TIKTOK = "tiktok"
+
+
 class FlyerConversation(BaseModel):
     role: Role
     message: str
@@ -32,6 +41,18 @@ class FlyerDesignQuery(BaseModel):
     marketing_idea: str
     designer_guidelines: str
     image_flyer_content: str
+    layout_name: str 
+
+class ThumbnailDesignQuery(BaseModel):
+    main_text: str
+    highlight_text: str
+    emojis: List[str]
+    corner_emoji: str
+    text_position: str
+    thumbnail_type: ThumbnailType
+    
+    class Config:
+        use_enum_values = True
 
 class FlyerDesignFile(BaseModel):
     sizes: FlyerSizes
@@ -44,7 +65,8 @@ class FlyerDesignFile(BaseModel):
 class FlyerModel(BaseModel):
     flyer_id: str
     flyer_type: FlyerType
-    flyer_design_query: FlyerDesignQuery
+    flyer_design_query: Optional[FlyerDesignQuery] = None
+    thumbnail_design_query: Optional[ThumbnailDesignQuery] = None
     design_image_options: List[str]
     current_design_image: Optional[str] = None
     html_content: str
@@ -65,6 +87,7 @@ class FlyerCreate(BaseModel):
     flyer_type: FlyerType
     image_url: Optional[str] = None
     application_id: str
+    thumbnail_type: Optional[ThumbnailType] = None
 
 
 class FlyerUpdate(BaseModel):

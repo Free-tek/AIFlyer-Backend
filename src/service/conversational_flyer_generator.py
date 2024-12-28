@@ -5,9 +5,9 @@ import re
 import uuid
 from datetime import datetime
 from src.core.model_manager import get_claude_client
-from src.model.flyer_model import FlyerCreate, FlyerModel, FlyerConversation, Role, FlyerDesignQuery, FlyerDesignFile
+from src.model.flyer_model import FlyerCreate, FlyerModel, FlyerConversation, Role, FlyerDesignQuery, FlyerDesignFile, FlyerType, ThumbnailDesignQuery, ThumbnailType
 from src.crud.flyer_generation import flyer_crud
-from src.utils.prompts import generate_marketing_content_prompt, generate_image_query_prompt, generate_initial_design_prompt, generate_refine_design_prompt, classify_intent_prompt, reformat_design_size_prompt, layout_options
+from src.utils.prompts import generate_marketing_content_prompt, generate_image_query_prompt, generate_initial_design_prompt, generate_refine_design_prompt, classify_intent_prompt, reformat_design_size_prompt, layout_options, generate_vector_image_query_prompt, generate_thumbnail_caption_prompt, generate_thumbnail_design_prompt, generate_thumbnail_image_query_prompt, thumbnail_layout_options
 from src.crud.auth import AuthCrud
 from firebase_admin import storage, firestore
 from playwright.async_api import async_playwright
@@ -20,6 +20,9 @@ from src.core.config import settings
 from pydantic import ValidationError
 import asyncio
 from functools import wraps
+from src.utils import constants
+import base64
+import json
 
 logger = logging.getLogger(__name__)
 
@@ -81,75 +84,110 @@ class ConversationalFlyerGenerator:
                 business_details = application['application_data']
                 break
 
-        if flyer_in.flyer_description:
-            #generate flyer design image search query
+        flyers = await flyer_crud.get_user_flyers(user_id)
+        flyer_design_query = [flyer['flyer_design_query']['image_flyer_content'] for flyer in flyers if flyer != None and flyer['flyer_type'] == flyer_in.flyer_type]
+
+        if flyer_in.flyer_type == FlyerType.THUMBNAIL:
+            new_flyer_design_query = None
+            
+            thumbnail_design_query = await self.generate_thumbnail_caption(flyer_in.flyer_description, flyer_in.thumbnail_type)
+            print(f"The flyer description is: {thumbnail_design_query}")
+            flyer_name=thumbnail_design_query.main_text[:20] + "..."
+
             if not flyer_in.image_url:
-                search_query = await self.generate_image_query(flyer_in.flyer_description)
-            new_flyer_design_query = FlyerDesignQuery(
-                marketing_idea=flyer_in.flyer_description,
-                designer_guidelines=flyer_in.flyer_description,
-                image_flyer_content=flyer_in.flyer_description
-            )
+                search_query = await self.generate_thumbnail_image_query(flyer_in.flyer_description)
+                images = self.get_image(search_query)
+                image_url = images[0] if images else None
+            else:
+                images = [flyer_in.image_url]
+                image_url = flyer_in.image_url
+
+            if flyer_in.thumbnail_type == ThumbnailType.TIKTOK:
+                layout_option = random.choice(["tiktok_thumbnail_layout_1", "tiktok_thumbnail_layout_2"])
+            else:
+                layout_option = "youtube_thumbnail_layout_"
+
+            html_content = await self.generate_thumbnail_design(flyer_in.flyer_description, image_url, layout_option)
+            print(html_content)
 
             conversation_history = [FlyerConversation(role=Role.USER, message=flyer_in.flyer_description, message_id=str(int(datetime.now().timestamp())))]
-            conversation_history.append(FlyerConversation(role=Role.ASSISTANT, message=f"Done creating this flyer for you, will you like to make any changes?", message_id=str(int(datetime.now().timestamp()))))
-        else:
-            flyers = await flyer_crud.get_user_flyers(user_id)
-            flyer_design_query = [flyer['flyer_design_query']['image_flyer_content'] for flyer in flyers]
-            
-            new_flyer_design_query = await self.generate_marketing_content(str(business_details), flyer_design_query)
+            conversation_history.append(FlyerConversation(role=Role.ASSISTANT, message=f"Done creating this thumbnail for you, will you like to make any changes?", message_id=str(int(datetime.now().timestamp()))))
 
-            if new_flyer_design_query == None:
-                raise HTTPException(status_code=400, detail="Failed to generate an automatic flyer, please tell me what you'll like to design.")
 
-            conversation_history = [FlyerConversation(role=Role.ASSISTANT, message=f"I came up with a flyer concept for you, it is centered around {new_flyer_design_query.marketing_idea}", message_id=str(int(datetime.now().timestamp())))]
+        elif flyer_in.flyer_type == FlyerType.GENERAL:
+            thumbnail_design_query = None
+            if flyer_in.flyer_description:
+                #generate flyer design image search query
+                if not flyer_in.image_url:
+                    search_query = await self.generate_image_query(flyer_in.flyer_description)
 
-            #generate flyer design image search query
+                current_context = str(business_details) + "USERS DESCRIPTION OF THE FLYER THEY WANT:" + str(flyer_in.flyer_description)
+                new_flyer_design_query = await self.generate_marketing_content(str(current_context), flyer_design_query)
+
+                conversation_history = [FlyerConversation(role=Role.USER, message=flyer_in.flyer_description, message_id=str(int(datetime.now().timestamp())))]
+                conversation_history.append(FlyerConversation(role=Role.ASSISTANT, message=f"Done creating this flyer for you, will you like to make any changes?", message_id=str(int(datetime.now().timestamp()))))
+            else:
+                new_flyer_design_query = await self.generate_marketing_content(str(business_details), flyer_design_query)
+
+                if new_flyer_design_query == None:
+                    raise HTTPException(status_code=400, detail="Failed to generate an automatic flyer, please tell me what you'll like to design.")
+
+                conversation_history = [FlyerConversation(role=Role.ASSISTANT, message=f"I came up with a flyer concept for you, it is centered around {new_flyer_design_query.marketing_idea}", message_id=str(int(datetime.now().timestamp())))]
+
+                #generate flyer design image search query
+                if not flyer_in.image_url:
+                    search_query = await self.generate_image_query(new_flyer_design_query.designer_guidelines)
+
+            #generate vector image search query
+            if new_flyer_design_query.layout_name == "vector_images_design":
+                search_query = await self.generate_vector_query(new_flyer_design_query.designer_guidelines)
+                vector_images = self.get_vector_images(search_query)
+            else:
+                vector_images = None
+
             if not flyer_in.image_url:
-                search_query = await self.generate_image_query(new_flyer_design_query.designer_guidelines)
+                #get image to include in flyer
+                images = self.get_image(search_query)
+                image_url = images[0] if images else None
+            else:
+                images = [flyer_in.image_url]
+                image_url = flyer_in.image_url
 
-        if not flyer_in.image_url:
-            #get image to include in flyer
-            images = self.get_image(search_query)
-            image_url = images[0] if images else None
-        else:
-            images = [flyer_in.image_url]
-            image_url = flyer_in.image_url
+            if len(images) > 1:
+                other_images = images[1:]
+            else:
+                other_images = []
 
-        if len(images) > 1:
-            other_images = images[1:]
-        else:
-            other_images = []
-
-        # Generate initial design
-        print(f"The flyer description is: {new_flyer_design_query}")
-        task_description = f"Business details: {business_details}, Flyer description: {str(new_flyer_design_query)}"
-        html_content = await self.generate_initial_design(task_description, image_url, other_images)
-
-        timestamp = int(datetime.now().timestamp())
+            # Generate initial design
+            print(f"The flyer description is: {new_flyer_design_query}")
+            task_description = f"Business details: {business_details}, Flyer description: {str(new_flyer_design_query)}"
+            html_content = await self.generate_initial_design(task_description, image_url, other_images, new_flyer_design_query, vector_images)
+            flyer_name=new_flyer_design_query.marketing_idea[:20] + "..."
+            
 
         
-
+        timestamp = int(datetime.now().timestamp())
+        
         # Create flyer record
         flyer_model = FlyerModel(
             flyer_id=str(timestamp),
             flyer_type=flyer_in.flyer_type,
             flyer_design_query=new_flyer_design_query,
+            thumbnail_design_query=thumbnail_design_query,
             design_image_options=images,
             current_design_image=image_url,
             html_content=html_content,
             image_url=None,
             application_id=flyer_in.application_id,
-            flyer_name=new_flyer_design_query.marketing_idea[:20] + "...",
+            flyer_name=flyer_name,
             user_id=user_id,
             conversation_history=conversation_history,
             created_at=datetime.now().isoformat(),
             updated_at=datetime.now().isoformat()
         )
 
-        print(html_content)
-
-
+        print(f"The html content is: {html_content}")
+            
         await flyer_crud.create_flyer(user_id, flyer_model)
         return flyer_model
 
@@ -170,19 +208,118 @@ class ConversationalFlyerGenerator:
         content_idea = response.content[0].text.strip().lower()
         content_idea = content_idea.replace("\n", "").replace(" \"", "\"").replace("{ \"", "{\"")
 
-        match = re.search(r'{\s*"marketing_idea":\s*"(.*?)",\s*"designer_guidelines":\s*"(.*?)",\s*"image_flyer_content":\s*"(.*?)"\s*}', content_idea)
+        match = re.search(r'{\s*"marketing_idea":\s*"(.*?)",\s*"designer_guidelines":\s*"(.*?)",\s*"image_flyer_content":\s*"(.*?)",\s*"layout_name":\s*"(.*?)"\s*}', content_idea)
         if match:
             marketing_idea = match.group(1)
             designer_guidelines = match.group(2)
             image_flyer_content = match.group(3)
+            layout_name = match.group(4)
             return FlyerDesignQuery(
                 marketing_idea=marketing_idea,
                 designer_guidelines=designer_guidelines,
-                image_flyer_content=image_flyer_content
+                image_flyer_content=image_flyer_content,
+                layout_name=layout_name
             )
         else:
             return None
         
+
+    async def generate_thumbnail_caption(self, flyer_description, thumbnail_type):
+        """Generate marketing content ideas"""
+        prompt = generate_thumbnail_caption_prompt(flyer_description)
+
+        # Create the message and await the response
+        response = await self.client.messages.create(
+            model="claude-3-opus-20240229",
+            max_tokens=350,
+            messages=[{"role": "user", "content": prompt}]
+        )
+
+        # Get the content from the response
+        print(f"this is response: {response}")
+        print(f"this is prompt: {prompt}")
+        
+        try:
+            # Extract the JSON string from the response
+            content = response.content[0].text.strip()
+            # Find the JSON object between curly braces
+            json_match = re.search(r'{\s*".*?}', content, re.DOTALL)
+            if not json_match:
+                return None
+            
+            json_str = json_match.group(0)
+            # Parse the JSON string
+            data = json.loads(json_str)
+            
+            # Keep emojis as a list (don't join them)
+            return ThumbnailDesignQuery(
+                main_text=data['main_text'],
+                highlight_text=data['highlight_text'],
+                emojis=data['emojis'],  # Keep as list
+                corner_emoji=data['corner_emoji'],
+                text_position=data['text_position'],
+                thumbnail_type=thumbnail_type
+            )
+        except (json.JSONDecodeError, KeyError) as e:
+            logger.error(f"Error parsing thumbnail caption response: {e}")
+            return None
+        
+    
+    async def generate_thumbnail_design(self, video_details, image_url, layout_option):
+        """Generate the thumbnail design"""
+
+        if layout_option == "tiktok_thumbnail_layout_1":
+            sample_image_url = "https://firebasestorage.googleapis.com/v0/b/flyerai.firebasestorage.app/o/sandbox%20files%2FScreenshot%202024-12-26%20at%205.21.16%E2%80%AFPM.png?alt=media&token=826e745e-d159-4b59-b426-261df68c143e"
+            sample_image_type = "image/png"
+        elif layout_option == "tiktok_thumbnail_layout_2":
+            sample_image_url = "https://firebasestorage.googleapis.com/v0/b/flyerai.firebasestorage.app/o/sandbox%20files%2FWhatsApp%20Image%202024-12-28%20at%201.22.49%20AM%20(1).jpeg?alt=media&token=77d5cd46-8822-4777-8be2-824ff4b04a42"
+            sample_image_type = "image/jpeg"
+        elif layout_option == "youtube_thumbnail_layout_1":
+            sample_image_url = "https://firebasestorage.googleapis.com/v0/b/flyerai.firebasestorage.app/o/sandbox%20files%2FScreenshot%202024-12-26%20at%205.21.16%E2%80%AFPM.png?alt=media&token=826e745e-d159-4b59-b426-261df68c143e"
+            sample_image_type = "image/png"
+        elif layout_option == "youtube_thumbnail_layout_2":
+            sample_image_url = ""
+            sample_image_type = "image/jpeg"
+
+        # Download the image and convert to base64
+        image_response = requests.get(sample_image_url)
+        image_response.raise_for_status()
+        image_data = base64.b64encode(image_response.content).decode('utf-8')
+
+        print(f"this is layout_option {layout_option}")
+
+
+        messages = [
+            {
+                "role": "user",
+                "content": [
+                    {
+                        "type": "text",
+                        "text": generate_thumbnail_design_prompt(video_details, image_url, thumbnail_layout_options[layout_option])
+                    },
+                    {
+                        "type": "image",
+                        "source": {
+                            "type": "base64",
+                            "media_type": sample_image_type,
+                            "data": image_data
+                        }
+                    }
+                ]
+            }
+        ]
+        response = await self.client.messages.create(
+            model="claude-3-sonnet-20240229",
+            max_tokens=4000,
+            messages=messages
+        )
+
+        print(f"this is model response: {response}")
+
+        current_design = response.content[0].text.strip()
+        current_design_html = extract_html(current_design)
+        return current_design_html
+
 
 
 
@@ -197,6 +334,51 @@ class ConversationalFlyerGenerator:
             str: 2-3 word search query
         """
         prompt = generate_image_query_prompt(flyer_description)
+
+        response = await self.client.messages.create(
+            model="claude-3-opus-20240229",
+            max_tokens=100,
+            messages=[{"role": "user", "content": prompt}]
+        )
+
+        # Clean and return the search query
+        search_query =  response.content[0].text.strip().lower()
+        return search_query
+    
+
+    async def generate_thumbnail_image_query(self, video_description):
+        """
+        Generate a concise image search query from video description
+
+        Args:
+            video_description (str): User's description of desired video
+
+        Returns:
+            str: 2-3 word search query
+        """
+        prompt = generate_thumbnail_image_query_prompt(video_description)
+
+        response = await self.client.messages.create(
+            model="claude-3-opus-20240229",
+            max_tokens=100,
+            messages=[{"role": "user", "content": prompt}]
+        )
+
+        # Clean and return the search query
+        search_query =  response.content[0].text.strip().lower()
+        return search_query
+    
+    async def generate_vector_query(self, flyer_description):
+        """
+        Generate a concise vectorimage search query from flyer description
+
+        Args:
+            flyer_description (str): User's description of desired flyer
+
+        Returns:
+            str: 1-2 word search query
+        """
+        prompt = generate_vector_image_query_prompt(flyer_description)
 
         response = await self.client.messages.create(
             model="claude-3-opus-20240229",
@@ -236,22 +418,88 @@ class ConversationalFlyerGenerator:
         return [item.replace("373", "800") for item in matches]
 
 
-    async def generate_initial_design(self, business_details, image_url, other_images):
+    def get_vector_images(self, query):
+        """ Get vector images for design from the query and using freepik API"""
+        
+        url = constants.FREEPIK_API_URL
+
+        querystring = {"term":query,"page":"1","per_page":"10"}
+        headers = {"x-freepik-api-key": settings.FREEPIK_API_KEY}
+
+        response = requests.request("GET", url, headers=headers, params=querystring)
+        if response.status_code == 200:
+            data = response.json()
+            data = data["data"]
+            result = []
+            for icon in data:
+                ic = icon["thumbnails"][0]["url"].replace("/128/", "/512/")
+                result.append(ic)
+
+            return result
+        else:
+            print(f"Request failed with status code {response.status_code}")
+            return []
+
+
+
+    async def generate_initial_design(self, business_details, image_url, other_images, new_flyer_design_query, vector_images = None):
         """Generate the initial flyer design"""
         print(business_details)
         print(image_url)
-        prompt = generate_initial_design_prompt(business_details, image_url, other_images, layout_options["card_layout"])
+        print(new_flyer_design_query)
+        print(vector_images)
         
+        if new_flyer_design_query.layout_name == "vector_images_design":
+            #TODO: Add permantely available image urls
+            sample_image_url = "https://firebasestorage.googleapis.com/v0/b/flyerai.firebasestorage.app/o/sample_designs%2FGUiPy5eXkAAi3L7.jpeg?alt=media&token=62cc6c34-7d7c-488b-aa0f-bd16776fdb7b"
+        elif new_flyer_design_query.layout_name == "card_layout":
+            sample_image_url = "https://firebasestorage.googleapis.com/v0/b/flyerai.firebasestorage.app/o/sample_designs%2FScreenshot%202024-12-27%20at%201.35.00%E2%80%AFPM.png?alt=media&token=ea2fcf87-b98d-49f1-896c-70ed278f3163"
+        elif new_flyer_design_query.layout_name == "pattern_background":
+            sample_image_url = "https://firebasestorage.googleapis.com/v0/b/flyerai.firebasestorage.app/o/sample_designs%2FScreenshot%202024-12-27%20at%201.40.34%E2%80%AFPM.png?alt=media&token=230f017c-88f7-40a2-9968-2c8df1cecb47"
+        elif new_flyer_design_query.layout_name == "split_layout":
+            sample_image_url = "https://firebasestorage.googleapis.com/v0/b/flyerai.firebasestorage.app/o/sample_designs%2FScreenshot%202024-12-27%20at%201.41.49%E2%80%AFPM.png?alt=media&token=060d41f0-8d4e-443c-9d70-17a1d9567685"
+        elif new_flyer_design_query.layout_name == "full_background_image":
+            sample_image_url = "https://firebasestorage.googleapis.com/v0/b/flyerai.firebasestorage.app/o/sample_designs%2FScreenshot%202024-12-21%20at%2012.02.07%E2%80%AFAM.png?alt=media&token=bc794f71-a944-45e4-a0f8-d889b8ed661a"
+
+
+        # Download the image and convert to base64
+        image_response = requests.get(sample_image_url)
+        image_response.raise_for_status()
+        image_data = base64.b64encode(image_response.content).decode('utf-8')
+        
+        # Create message with image
+        messages = [
+            {
+                "role": "user",
+                "content": [
+                    {
+                        "type": "text",
+                        "text": generate_initial_design_prompt(business_details, image_url, other_images, layout_options[new_flyer_design_query.layout_name], vector_images)
+                    },
+                    {
+                        "type": "image",
+                        "source": {
+                            "type": "base64",
+                            "media_type": "image/jpeg",
+                            "data": image_data
+                        }
+                    }
+                ]
+            }
+        ]
         response = await self.client.messages.create(
-            model="claude-3-opus-20240229",
+            model="claude-3-sonnet-20240229",
             max_tokens=4000,
-            messages=[{"role": "user", "content": prompt}]
+            messages=messages
         )
+
+        print(f"this is model response: {response}")
 
         current_design = response.content[0].text.strip()
         current_design_html = extract_html(current_design)
         return current_design_html
-
+            
+        
     async def refine_design(self, user_input, user_id, flyer_id):
         try:
             """Refine the design based on user feedback"""
@@ -293,6 +541,7 @@ class ConversationalFlyerGenerator:
 
 
             # Get AI response with retries
+            print(f"this is refine prompt: {messages}")
             response = await self._get_ai_response(system_prompt, messages)
 
             # Create new conversation entries
@@ -472,6 +721,8 @@ class ConversationalFlyerGenerator:
                     "flyer": flyer.model_dump() if hasattr(flyer, 'model_dump') else flyer,
                     "message": "I have updated the design image based on your feedback"
                 }
+
+            # TODO: Add vector image to design
 
             elif "EXIT" in intent:
                 response_data = {
