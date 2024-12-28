@@ -784,15 +784,21 @@ class ConversationalFlyerGenerator:
                     status_code=403, 
                     detail="You're on a free plan, you can't export flyers. Please upgrade to a paid plan to export flyers"
                 )
-            elif user_details['plan_tier'] == "starter":
-                flyer_sizes = ["1080x1080"]
-            elif user_details['plan_tier'] in ["pro", "premium"]:
-                flyer_sizes = ["1080x1080", "1600x900", "1200x630", "1200x628", "1080x1920", "1000x1500", "1280x720"]
+            if flyer_data.flyer_type == "thumbnail":
+                if flyer_data.thumbnail_design_query.thumbnail_type == "tiktok":
+                    flyer_sizes = ["1080x1920"]
+                else:
+                    flyer_sizes = ["1280x720"]
             else:
-                raise HTTPException(
-                    status_code=403, 
-                    detail="You're on a free plan, you can't export flyers. Please upgrade to a paid plan to export flyers"
-                )
+                if user_details['plan_tier'] == "starter":
+                    flyer_sizes = ["1080x1080"]
+                elif user_details['plan_tier'] in ["pro", "premium"]:
+                    flyer_sizes = ["1080x1080", "1600x900", "1200x630", "1200x628", "1080x1920", "1000x1500", "1280x720"]
+                else:
+                    raise HTTPException(
+                        status_code=403, 
+                        detail="You're on a free plan, you can't export flyers. Please upgrade to a paid plan to export flyers"
+                    )
             
             designs = await self.save_design(flyer_data, user_id, flyer_sizes)
             return designs
@@ -846,6 +852,7 @@ class ConversationalFlyerGenerator:
                     html_content = flyer_data.html_content
                     width, height = map(int, size.split('x'))
 
+                    
                     # Update container dimensions and styles in HTML
                     html_content = html_content.replace(
                         'width: 800px;',
