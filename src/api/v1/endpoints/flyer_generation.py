@@ -80,10 +80,10 @@ async def update_flyer(
         }
         
     except HTTPException as he:
-        raise he
+        raise HTTPException(status_code=500, detail="Failed to generate an automatic flyer, please tell me what you'll like to design.")
     except Exception as e:
         logger.error(f"Error in update_flyer: {str(e)}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Failed to generate an automatic flyer, please tell me what you'll like to design.")
     
 
 @router.post("/export")

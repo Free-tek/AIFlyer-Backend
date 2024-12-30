@@ -9,6 +9,7 @@ from src.model.flyer_model import FlyerCreate, FlyerModel, FlyerConversation, Ro
 from src.crud.flyer_generation import flyer_crud
 from src.utils.prompts import generate_marketing_content_prompt, generate_image_query_prompt, generate_initial_design_prompt, generate_refine_design_prompt, classify_intent_prompt, reformat_design_size_prompt, layout_options, generate_vector_image_query_prompt, generate_thumbnail_caption_prompt, generate_thumbnail_design_prompt, generate_thumbnail_image_query_prompt, thumbnail_layout_options
 from src.crud.auth import AuthCrud
+from src.crud.billing import BillingCrud
 from firebase_admin import storage, firestore
 from playwright.async_api import async_playwright
 from fastapi import HTTPException
@@ -168,23 +169,27 @@ class ConversationalFlyerGenerator:
         
         timestamp = int(datetime.now().timestamp())
         
-        # Create flyer record
-        flyer_model = FlyerModel(
-            flyer_id=str(timestamp),
-            flyer_type=flyer_in.flyer_type,
-            flyer_design_query=new_flyer_design_query,
-            thumbnail_design_query=thumbnail_design_query,
-            design_image_options=images,
-            current_design_image=image_url,
-            html_content=html_content,
-            image_url=None,
-            application_id=flyer_in.application_id,
-            flyer_name=flyer_name,
-            user_id=user_id,
-            conversation_history=conversation_history,
-            created_at=datetime.now().isoformat(),
-            updated_at=datetime.now().isoformat()
-        )
+        try:
+            # Create flyer record
+            flyer_model = FlyerModel(
+                flyer_id=str(timestamp),
+                flyer_type=flyer_in.flyer_type,
+                flyer_design_query=new_flyer_design_query,
+                thumbnail_design_query=thumbnail_design_query,
+                design_image_options=images,
+                current_design_image=image_url,
+                html_content=html_content,
+                image_url=None,
+                application_id=flyer_in.application_id,
+                flyer_name=flyer_name,
+                user_id=user_id,
+                conversation_history=conversation_history,
+                created_at=datetime.now().isoformat(),
+                updated_at=datetime.now().isoformat()
+            )
+        except Exception as e:
+            print(f"this is error parsing FlyerModel: {e}")
+            raise HTTPException(status_code=400, detail="Failed to generate the design, please try again.")
 
         print(f"The html content is: {html_content}")
             
@@ -452,15 +457,19 @@ class ConversationalFlyerGenerator:
         if new_flyer_design_query.layout_name == "vector_images_design":
             #TODO: Add permantely available image urls
             sample_image_url = "https://firebasestorage.googleapis.com/v0/b/flyerai.firebasestorage.app/o/sample_designs%2FGUiPy5eXkAAi3L7.jpeg?alt=media&token=62cc6c34-7d7c-488b-aa0f-bd16776fdb7b"
+            sample_image_type = "image/png"
         elif new_flyer_design_query.layout_name == "card_layout":
             sample_image_url = "https://firebasestorage.googleapis.com/v0/b/flyerai.firebasestorage.app/o/sample_designs%2FScreenshot%202024-12-27%20at%201.35.00%E2%80%AFPM.png?alt=media&token=ea2fcf87-b98d-49f1-896c-70ed278f3163"
+            sample_image_type = "image/png"
         elif new_flyer_design_query.layout_name == "pattern_background":
             sample_image_url = "https://firebasestorage.googleapis.com/v0/b/flyerai.firebasestorage.app/o/sample_designs%2FScreenshot%202024-12-27%20at%201.40.34%E2%80%AFPM.png?alt=media&token=230f017c-88f7-40a2-9968-2c8df1cecb47"
+            sample_image_type = "image/png"
         elif new_flyer_design_query.layout_name == "split_layout":
             sample_image_url = "https://firebasestorage.googleapis.com/v0/b/flyerai.firebasestorage.app/o/sample_designs%2FScreenshot%202024-12-27%20at%201.41.49%E2%80%AFPM.png?alt=media&token=060d41f0-8d4e-443c-9d70-17a1d9567685"
+            sample_image_type = "image/png"
         elif new_flyer_design_query.layout_name == "full_background_image":
-            sample_image_url = "https://firebasestorage.googleapis.com/v0/b/flyerai.firebasestorage.app/o/sample_designs%2FScreenshot%202024-12-21%20at%2012.02.07%E2%80%AFAM.png?alt=media&token=bc794f71-a944-45e4-a0f8-d889b8ed661a"
-
+            sample_image_url = "https://firebasestorage.googleapis.com/v0/b/flyerai.firebasestorage.app/o/sample_designs%2FScreenshot%202024-12-28%20at%202.19.19%E2%80%AFPM.png?alt=media&token=7ece225a-d3f7-40d8-8f81-4f31e99a345e"
+            sample_image_type = "image/png"
 
         # Download the image and convert to base64
         image_response = requests.get(sample_image_url)
@@ -480,7 +489,7 @@ class ConversationalFlyerGenerator:
                         "type": "image",
                         "source": {
                             "type": "base64",
-                            "media_type": "image/jpeg",
+                            "media_type": sample_image_type,
                             "data": image_data
                         }
                     }
@@ -779,6 +788,23 @@ class ConversationalFlyerGenerator:
 
             # Get user's plan type to determine flyer sizes
             user_details = AuthCrud.get_user_details(user_id)
+            stripe_customers = user_details.get("stripe_customers")
+            stripe_customer_id = stripe_customers.get("stripe_customer_id")
+            if stripe_customer_id:
+                if stripe_customers[stripe_customer_id].get("export_limit")  != None and stripe_customers[stripe_customer_id].get("export_limit") > 0:
+                    pass
+                else:
+                    raise HTTPException(
+                        status_code=403, 
+                        detail="You've reached your design export limit for this billing period. Please upgrade your plan to continue creating designs."
+                    )
+            else:
+                raise HTTPException(
+                    status_code=403, 
+                    detail="You're on a free plan, you can't export flyers. Please upgrade to a paid plan to export flyers"
+                )
+
+
             if user_details['plan_tier'] == "free":
                 raise HTTPException(
                     status_code=403, 
@@ -801,12 +827,16 @@ class ConversationalFlyerGenerator:
                     )
             
             designs = await self.save_design(flyer_data, user_id, flyer_sizes)
+            billing_crud = BillingCrud()
+            update_flyer_export_limit = billing_crud.update_flyer_export_limit(user_id)
             return designs
 
         except ValidationError as e:
             logger.error(f"Validation error in export_flyer: {str(e)}")
             raise HTTPException(status_code=422, detail=str(e))
         except Exception as e:
+            import traceback
+            traceback.print_exc()   
             logger.error(f"Error in export_flyer: {str(e)}")
             raise HTTPException(status_code=500, detail=str(e))
 

@@ -73,6 +73,7 @@ class FlyerCRUD:
             logger.error(f"Error updating flyer: {str(e)}")
             raise
 
+
     async def delete_flyer(self, user_id: str, flyer_id: str) -> bool:
         """Delete a flyer"""
         try:
