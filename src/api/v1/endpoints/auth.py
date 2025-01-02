@@ -4,6 +4,7 @@ from fastapi import APIRouter, HTTPException, Depends
 from src.model.auth_model import CreateAccountRequest, LoginRequest, UpdateUserDetailsRequest
 from src.service.api_helper import ApiHelper
 from src.crud.auth import AuthCrud
+from src.service.guest_user_service import GuestUserService
 
 logger = logging.getLogger(__name__)
 
@@ -28,6 +29,25 @@ async def create_account(request: CreateAccountRequest):
 
     if "error" in res:
         raise HTTPException(status_code=400, detail=res["error"])
+    
+    # If there's a guest_id, transfer the designs
+    if request.guest_id and request.guest_id.startswith('guest_'):
+        try:
+            guest_service = GuestUserService()
+            await guest_service.transfer_guest_designs(request.guest_id, res["id"])
+        except Exception as e:
+            logger.error(f"Error transferring guest designs: {str(e)}")
+            # Don't fail account creation if transfer fails
+            # but maybe add it to the response
+            return {
+                "success": True,
+                "data": {
+                    "user_id": res["id"],
+                    "token": res["token"],
+                    "transfer_error": str(e)
+                },
+                "message": "Account created successfully but failed to transfer designs"
+            }
     
     return {
         "success": True,

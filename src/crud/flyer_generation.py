@@ -102,4 +102,18 @@ class FlyerCRUD:
             logger.error(f"Error getting user flyers: {str(e)}")
             raise
 
+    async def delete_guest_flyers(self, guest_id: str) -> bool:
+        """Delete all flyers for a guest user"""
+        try:
+            flyers = self.flyers_data_ref.document(guest_id).collection("flyers").get()
+            
+            for flyer in flyers:
+                flyer.reference.delete()
+                
+            return True
+            
+        except Exception as e:
+            logger.error(f"Error deleting guest flyers: {str(e)}")
+            raise
+
 flyer_crud = FlyerCRUD()

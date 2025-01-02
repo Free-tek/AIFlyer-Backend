@@ -5,6 +5,7 @@ from typing import Optional, Any, Dict, List, Union
 class CreateAccountRequest(BaseModel):
     email: str
     password: str
+    guest_id: Optional[str] = None
 
 class LoginRequest(BaseModel):
     email: str

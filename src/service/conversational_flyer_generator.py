@@ -24,6 +24,7 @@ from functools import wraps
 from src.utils import constants
 import base64
 import json
+from src.service.guest_user_service import GuestUserService
 
 logger = logging.getLogger(__name__)
 
@@ -51,6 +52,122 @@ def async_retry(retries=3, delay=1):
         return wrapper
     return decorator
 
+def add_watermark_to_html(html_content: str) -> str:
+    """
+    Add a diagonal watermark overlay to the HTML design for guest users
+    """
+    watermark_css = """
+    <style>
+    .container {
+        position: relative !important;
+    }
+    
+    .watermark-overlay {
+        position: absolute !important;
+        top: 0 !important;
+        left: 0 !important;
+        width: 100% !important;
+        height: 100% !important;
+        pointer-events: none !important;
+        z-index: 1000 !important;
+        background: repeating-linear-gradient(
+            -45deg,
+            rgba(255, 255, 255, 0.15),
+            rgba(255, 255, 255, 0.15) 20px,
+            rgba(255, 255, 255, 0.25) 20px,
+            rgba(255, 255, 255, 0.25) 40px
+        ) !important;
+        display: flex !important;
+        justify-content: center !important;
+        align-items: center !important;
+        overflow: hidden !important;
+    }
+
+    .watermark-text {
+        position: absolute !important;
+        top: 50% !important;
+        left: 50% !important;
+        transform: translate(-50%, -50%) rotate(-45deg) !important;
+        font-family: Arial, sans-serif !important;
+        font-size: 32px !important;
+        font-weight: bold !important;
+        color: rgba(0, 0, 0, 0.15) !important;
+        white-space: nowrap !important;
+        text-transform: uppercase !important;
+        letter-spacing: 8px !important;
+        width: 200% !important;
+        text-align: center !important;
+        pointer-events: none !important;
+    }
+
+    .watermark-repeat {
+        position: absolute !important;
+        display: flex !important;
+        flex-direction: column !important;
+        justify-content: space-around !important;
+        height: 300% !important;
+        width: 300% !important;
+        transform: rotate(-45deg) !important;
+    }
+
+    .watermark-row {
+        display: flex !important;
+        justify-content: space-around !important;
+        width: 100% !important;
+        opacity: 0.15 !important;
+    }
+
+    .watermark-item {
+        font-family: Arial, sans-serif !important;
+        font-size: 24px !important;
+        font-weight: bold !important;
+        color: #000 !important;
+        padding: 20px !important;
+        white-space: nowrap !important;
+    }
+    </style>
+    """
+
+    watermark_html = """
+    <div class="watermark-overlay">
+        <div class="watermark-repeat">
+            <div class="watermark-row">
+                <span class="watermark-item">AIFlyer</span>
+                <span class="watermark-item">AIFlyer</span>
+                <span class="watermark-item">AIFlyer</span>
+            </div>
+            <div class="watermark-row">
+                <span class="watermark-item">AIFlyer</span>
+                <span class="watermark-item">AIFlyer</span>
+                <span class="watermark-item">AIFlyer</span>
+            </div>
+            <div class="watermark-row">
+                <span class="watermark-item">AIFlyer</span>
+                <span class="watermark-item">AIFlyer</span>
+                <span class="watermark-item">AIFlyer</span>
+            </div>
+        </div>
+    </div>
+    """
+
+    # Find the closing head tag or create one if it doesn't exist
+    if "</head>" in html_content:
+        html_content = html_content.replace("</head>", f"{watermark_css}</head>")
+    else:
+        html_content = f"<head>{watermark_css}</head>{html_content}"
+
+    # Find the container div and add the watermark
+    if '<div class="container"' in html_content:
+        html_content = html_content.replace(
+            '<div class="container"',
+            f'<div class="container">{watermark_html}'
+        )
+    else:
+        # If no container class found, wrap the entire content
+        html_content = f'<div class="container">{watermark_html}{html_content}</div>'
+
+    return html_content
+
 class ConversationalFlyerGenerator:
     def __init__(self):
         self.client = get_claude_client()
@@ -77,17 +194,27 @@ class ConversationalFlyerGenerator:
         Generate a flyer
         """
 
-        business_details = None
-        user_details = AuthCrud.get_user_details(user_id)
+        if user_id.startswith('guest_'):
+            guest_service = GuestUserService()
+            await guest_service.check_design_limit(user_id)
+            business_details = """This is a guest user trying to use the flyer generator feature, 
+            for their business details listen to as much as they tell you about their business from the prompt"""
+            flyer_design_query = []
+            flyer_in.application_id = "guest_user"
 
-        for application in user_details['applications']:
-            if application['application_id'] == flyer_in.application_id:
-                business_details = application['application_data']
-                break
+        else:
+            business_details = None
+            user_details = AuthCrud.get_user_details(user_id)
 
-        flyers = await flyer_crud.get_user_flyers(user_id)
-        flyer_design_query = [flyer['flyer_design_query']['image_flyer_content'] for flyer in flyers if flyer != None and flyer['flyer_type'] == flyer_in.flyer_type]
+            for application in user_details['applications']:
+                if application['application_id'] == flyer_in.application_id:
+                    business_details = application['application_data']
+                    break
 
+            flyers = await flyer_crud.get_user_flyers(user_id)
+            flyer_design_query = [flyer['flyer_design_query']['image_flyer_content'] for flyer in flyers if flyer != None and flyer['flyer_type'] == flyer_in.flyer_type]
+
+        print("this is the detail 0000")
         if flyer_in.flyer_type == FlyerType.THUMBNAIL:
             new_flyer_design_query = None
             
@@ -117,17 +244,22 @@ class ConversationalFlyerGenerator:
 
         elif flyer_in.flyer_type == FlyerType.GENERAL:
             thumbnail_design_query = None
+            print("this is the detail 1111")
             if flyer_in.flyer_description:
+                print("this is the detail 2222")
                 #generate flyer design image search query
                 if not flyer_in.image_url:
                     search_query = await self.generate_image_query(flyer_in.flyer_description)
 
                 current_context = str(business_details) + "USERS DESCRIPTION OF THE FLYER THEY WANT:" + str(flyer_in.flyer_description)
+                print(f"this is current context: {current_context}")
                 new_flyer_design_query = await self.generate_marketing_content(str(current_context), flyer_design_query)
-
+                print(f"this is new flyer design query: {new_flyer_design_query}")
+                
                 conversation_history = [FlyerConversation(role=Role.USER, message=flyer_in.flyer_description, message_id=str(int(datetime.now().timestamp())))]
                 conversation_history.append(FlyerConversation(role=Role.ASSISTANT, message=f"Done creating this flyer for you, will you like to make any changes?", message_id=str(int(datetime.now().timestamp()))))
             else:
+                print("this is the detail 3333")
                 new_flyer_design_query = await self.generate_marketing_content(str(business_details), flyer_design_query)
 
                 if new_flyer_design_query == None:
@@ -166,7 +298,7 @@ class ConversationalFlyerGenerator:
             flyer_name=new_flyer_design_query.marketing_idea[:20] + "..."
             
 
-        
+        print(f"this is the detail 4444 :: {flyer_in.flyer_type} :: {flyer_in} :: {flyer_in.flyer_type == FlyerType.GENERAL} :: {FlyerType.GENERAL}")
         timestamp = int(datetime.now().timestamp())
         
         try:
@@ -457,7 +589,7 @@ class ConversationalFlyerGenerator:
         if new_flyer_design_query.layout_name == "vector_images_design":
             #TODO: Add permantely available image urls
             sample_image_url = "https://firebasestorage.googleapis.com/v0/b/flyerai.firebasestorage.app/o/sample_designs%2FGUiPy5eXkAAi3L7.jpeg?alt=media&token=62cc6c34-7d7c-488b-aa0f-bd16776fdb7b"
-            sample_image_type = "image/png"
+            sample_image_type = "image/jpeg"
         elif new_flyer_design_query.layout_name == "card_layout":
             sample_image_url = "https://firebasestorage.googleapis.com/v0/b/flyerai.firebasestorage.app/o/sample_designs%2FScreenshot%202024-12-27%20at%201.35.00%E2%80%AFPM.png?alt=media&token=ea2fcf87-b98d-49f1-896c-70ed278f3163"
             sample_image_type = "image/png"
@@ -506,6 +638,11 @@ class ConversationalFlyerGenerator:
 
         current_design = response.content[0].text.strip()
         current_design_html = extract_html(current_design)
+
+        # Add watermark for guest users
+        if business_details.startswith('guest_'):
+            current_design_html = add_watermark_to_html(current_design_html)
+
         return current_design_html
             
         
@@ -578,6 +715,10 @@ class ConversationalFlyerGenerator:
                     detail="Failed to extract HTML content from the response"
                 )
             
+            # Add watermark for guest users
+            if user_id.startswith('guest_'):
+                html_content = add_watermark_to_html(html_content)
+
             # Prepare update data
             updated_flyer_data = {
                 **flyer_data,

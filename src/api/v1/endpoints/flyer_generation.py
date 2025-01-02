@@ -6,6 +6,7 @@ from fastapi_versioning import version
 from src.crud.flyer_generation import flyer_crud
 from src.model.flyer_model import FlyerCreate, FlyerUpdate, FlyerResponse, FlyerModel, FlyerDownload
 from src.service.conversational_flyer_generator import ConversationalFlyerGenerator
+from src.service.guest_user_service import GuestUserService
 from src.core.config import settings
 from src.crud.auth import AuthCrud
 import requests
@@ -53,6 +54,36 @@ async def create_flyer(
     else:
         raise HTTPException(status_code=400, detail="Failed to generate an automatic flyer, please tell me what you'll like to design.")
 
+
+@router.post("/create_flyer_guest")
+async def create_flyer_guest(
+    flyer_in: FlyerCreate
+):
+    """Create a new flyer"""
+    try:
+        # If no user_id, create a guest session
+        guest_service = GuestUserService()
+        guest_user = await guest_service.create_guest_user(flyer_in.device_info)
+        user_id = guest_user['user_id']
+
+        flyer_model = await generator.generate_flyer(flyer_in, user_id)
+        
+        if type(flyer_model) == FlyerModel:
+            if flyer_in.flyer_description:
+                return {"message": "Flyer generated successfully", "data": {"flyer": flyer_model.model_dump(), "message": f"Done creating this flyer for you, will you like to make any changes?"}, "status": "success"}
+            else:
+                result = {"message": "Flyer generated successfully", "data": {"flyer": flyer_model.model_dump(), "message": f"I came up with a flyer concept for you, it is centered around {flyer_model.flyer_design_query.marketing_idea}"}, "status": "success"}
+                print(f"result: {result}")
+                return {"message": "Flyer generated successfully", "data": {"flyer": flyer_model.model_dump(), "message": f"I came up with a flyer concept for you, it is centered around {flyer_model.flyer_design_query.marketing_idea}"}, "status": "success"}
+        else:
+            raise HTTPException(status_code=400, detail="Failed to generate an automatic flyer, please tell me what you'll like to design.")
+
+    except HTTPException as he:
+        raise he
+    except Exception as e:
+        logger.error(f"Error in create_flyer: {str(e)}")
+        raise HTTPException(status_code=500, detail=str(e))
+    
 
 @router.post("/update")
 async def update_flyer(

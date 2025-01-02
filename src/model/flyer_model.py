@@ -82,12 +82,21 @@ class FlyerModel(BaseModel):
         use_enum_values = True
 
 
+# Add this new model for device info
+class DeviceInfo(BaseModel):
+    userAgent: str
+    language: str
+    platform: str
+    screenResolution: str
+    timezone: str
+
 class FlyerCreate(BaseModel):
     flyer_description: Optional[str] = None
     flyer_type: FlyerType
     image_url: Optional[str] = None
-    application_id: str
+    application_id: Optional[str] = None
     thumbnail_type: Optional[ThumbnailType] = None
+    device_info: Optional[DeviceInfo] = None
 
 
 class FlyerUpdate(BaseModel):
