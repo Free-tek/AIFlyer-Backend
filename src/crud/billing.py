@@ -1,11 +1,12 @@
 from datetime import datetime, timedelta
 from fastapi import HTTPException
 from google.cloud.firestore_v1.base_query import FieldFilter
-from typing import Dict
+from typing import Dict, Optional
 import logging
 from src.database.db import  users_data_ref
 from src.model.billing_model import PaymentLinkDetails, PlanTier
 from src.crud.email_service import EmailService
+
 
 logger = logging.getLogger(__name__)
 
@@ -71,6 +72,12 @@ class BillingCrud:
                 PlanTier.PRO.value: 30,
                 PlanTier.PREMIUM.value: 100
             }
+
+            export_limits = {
+                PlanTier.STARTER.value: 10,
+                PlanTier.PRO.value: 40,
+                PlanTier.PREMIUM.value: 100000000000
+            }
             
             current_time = datetime.utcnow()
             
@@ -82,6 +89,7 @@ class BillingCrud:
                         "billing_period_end": (current_time + timedelta(days=30)).isoformat(),
                         "last_payment_date": current_time.isoformat(),
                         "image_limit": image_limits.get(plan_tier, 0),
+                        "export_limit": export_limits.get(plan_tier, 0),
                         "plan_tier": plan_tier,
                         "created_at": current_time.isoformat()
                     },
@@ -126,6 +134,12 @@ class BillingCrud:
                 PlanTier.PRO.value: 30,
                 PlanTier.PREMIUM.value: 100
             }
+
+            export_limits = {
+                PlanTier.STARTER.value: 10,
+                PlanTier.PRO.value: 40,
+                PlanTier.PREMIUM.value: 100000000000
+            }
             
             current_time = datetime.utcnow()
             
@@ -137,6 +151,7 @@ class BillingCrud:
                         "billing_period_end": (current_time + timedelta(days=30)).isoformat(),
                         "last_payment_date": current_time.isoformat(),
                         "image_limit": image_limits.get(customer_data['plan_tier'], 0),
+                        "export_limit": export_limits.get(customer_data['plan_tier'], 0),
                         "plan_tier": customer_data['plan_tier'],
                     }
                 },
@@ -179,6 +194,7 @@ class BillingCrud:
             self.users_data_ref.document(user_id).update({
                 f"stripe_customers.{customer_id}.plan_tier": PlanTier.FREE.value,
                 f"stripe_customers.{customer_id}.image_limit": 0,
+                f"stripe_customers.{customer_id}.export_limit": 0,
                 f"stripe_customers.{customer_id}.payment_failed": True,
                 f"stripe_customers.{customer_id}.payment_failure_reason": failure_message,
                 f"stripe_customers.{customer_id}.payment_failed_at": payment_failed_at,
@@ -210,3 +226,30 @@ class BillingCrud:
         except Exception as e:
             logger.error(f"Error handling payment failure: {str(e)}")
             raise
+
+    def update_flyer_export_limit(self, user_id: str) -> Optional[bool]:
+        """Update a flyer's content"""
+        try:
+            user_details = self.users_data_ref.document(user_id).get()
+            if not user_details:
+                return False
+            
+            stripe_customers = user_details.get("stripe_customers")
+            if not stripe_customers:
+                return False
+
+            stripe_customer_id = stripe_customers.get("stripe_customer_id")
+            stripe_customer_data = stripe_customers.get(stripe_customer_id)
+
+            if stripe_customer_data["export_limit"] > 0:
+                stripe_customer_data["export_limit"] = stripe_customer_data["export_limit"] - 1
+            else:
+                return False
+
+            self.users_data_ref.document(user_id).update({"stripe_customers": stripe_customers})
+
+            return True
+
+        except Exception as e:
+            logger.error(f"Error updating flyer: {str(e)}")
+            return False

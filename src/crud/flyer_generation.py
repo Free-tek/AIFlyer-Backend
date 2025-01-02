@@ -73,6 +73,7 @@ class FlyerCRUD:
             logger.error(f"Error updating flyer: {str(e)}")
             raise
 
+
     async def delete_flyer(self, user_id: str, flyer_id: str) -> bool:
         """Delete a flyer"""
         try:
@@ -93,12 +94,26 @@ class FlyerCRUD:
         """Get all flyers for a user"""
         try:
             flyers = self.flyers_data_ref.document(user_id).collection("flyers").get()
-            print(f"this is the flyers: {flyers}")
+            # print(f"this is the flyers: {flyers}")
             
             return [{**flyer.to_dict(), "flyer_id": flyer.id} for flyer in flyers]
 
         except Exception as e:
             logger.error(f"Error getting user flyers: {str(e)}")
+            raise
+
+    async def delete_guest_flyers(self, guest_id: str) -> bool:
+        """Delete all flyers for a guest user"""
+        try:
+            flyers = self.flyers_data_ref.document(guest_id).collection("flyers").get()
+            
+            for flyer in flyers:
+                flyer.reference.delete()
+                
+            return True
+            
+        except Exception as e:
+            logger.error(f"Error deleting guest flyers: {str(e)}")
             raise
 
 flyer_crud = FlyerCRUD()

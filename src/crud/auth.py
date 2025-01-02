@@ -111,7 +111,7 @@ class AuthCrud:
             response = {"id": user_id, "message": "User details updated successfully"}
             
             # If there's an application in the data
-            if 'applications' in data:
+            if 'applications' in data and data['applications'] != []:
                 applications = data['applications']
                 
                 if not applications or not isinstance(applications, list):
