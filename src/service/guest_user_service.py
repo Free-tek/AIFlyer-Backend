@@ -62,6 +62,17 @@ class GuestUserService:
         
         return guest_user
     
+    def get_guest_user(self, device_info: DeviceInfo) -> dict:
+        """
+        Get a guest user by their ID
+        """
+        device_info = device_info.model_dump()
+        fingerprint = self._create_device_fingerprint(device_info)
+
+        guest_id = f"guest_{fingerprint[:16]}"
+
+        return self.guest_users_ref.document(guest_id).get().to_dict()
+    
     def _create_device_fingerprint(self, device_info: dict) -> str:
         """
         Create a unique hash from device information
@@ -105,7 +116,7 @@ class GuestUserService:
             
         return True 
     
-    async def transfer_guest_designs(self, guest_id: str, permanent_user_id: str):
+    async def transfer_guest_designs(self, device_info: DeviceInfo, permanent_user_id: str, application_id: str):
         """
         Transfer designs from guest account to permanent account
         
@@ -115,39 +126,50 @@ class GuestUserService:
         """
         try:
             # Verify guest user exists
+            print(f"got here 222")
+            device_info = device_info.model_dump()
+            fingerprint = self._create_device_fingerprint(device_info)
+            guest_id = f"guest_{fingerprint[:16]}"
             guest_doc = self.guest_users_ref.document(guest_id).get()
+            print(f"got here 3333")
             if not guest_doc.exists:
+                print(f"guest doc does not exist {guest_id} :: {guest_doc}")
                 raise HTTPException(
                     status_code=404,
                     detail="Guest session not found"
                 )
             
             # Get all flyers for guest user
+            print(f"got here 4444")
             flyer_crud = FlyerCRUD()
             guest_flyers = await flyer_crud.get_user_flyers(guest_id)
+            print(f"got here 5555")
             
             # Transfer each flyer to the permanent user
             for flyer in guest_flyers:
                 # Update the user_id and application_id
                 flyer['user_id'] = permanent_user_id
-                flyer['application_id'] = 'default'  # Or get from user's default application
+                flyer['application_id'] = application_id
                 
                 # Create new flyer under permanent user
                 await flyer_crud.create_flyer(permanent_user_id, FlyerModel(**flyer))
             
+            print(f"got here 6666")
             # Delete guest user data
             self.guest_users_ref.document(guest_id).delete()
             
+            print(f"got here 7777")
             # Delete guest flyers
             await flyer_crud.delete_guest_flyers(guest_id)
             
+            print(f"got here 8888")
             return {
                 "message": "Designs transferred successfully",
                 "transferred_count": len(guest_flyers)
             }
             
         except Exception as e:
-            logger.error(f"Error transferring guest designs: {str(e)}")
+            print(f"Error transferring guest designs: {str(e)}")
             raise HTTPException(
                 status_code=500,
                 detail="Failed to transfer designs to new account"

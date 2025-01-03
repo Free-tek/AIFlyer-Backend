@@ -58,10 +58,6 @@ def add_watermark_to_html(html_content: str) -> str:
     """
     watermark_css = """
     <style>
-    .container {
-        position: relative !important;
-    }
-    
     .watermark-overlay {
         position: absolute !important;
         top: 0 !important;
@@ -81,23 +77,6 @@ def add_watermark_to_html(html_content: str) -> str:
         justify-content: center !important;
         align-items: center !important;
         overflow: hidden !important;
-    }
-
-    .watermark-text {
-        position: absolute !important;
-        top: 50% !important;
-        left: 50% !important;
-        transform: translate(-50%, -50%) rotate(-45deg) !important;
-        font-family: Arial, sans-serif !important;
-        font-size: 32px !important;
-        font-weight: bold !important;
-        color: rgba(0, 0, 0, 0.15) !important;
-        white-space: nowrap !important;
-        text-transform: uppercase !important;
-        letter-spacing: 8px !important;
-        width: 200% !important;
-        text-align: center !important;
-        pointer-events: none !important;
     }
 
     .watermark-repeat {
@@ -150,21 +129,34 @@ def add_watermark_to_html(html_content: str) -> str:
     </div>
     """
 
-    # Find the closing head tag or create one if it doesn't exist
+    # Add CSS to head without modifying container
     if "</head>" in html_content:
         html_content = html_content.replace("</head>", f"{watermark_css}</head>")
     else:
         html_content = f"<head>{watermark_css}</head>{html_content}"
 
-    # Find the container div and add the watermark
-    if '<div class="container"' in html_content:
-        html_content = html_content.replace(
-            '<div class="container"',
-            f'<div class="container">{watermark_html}'
+    # Find the first div in the body and add watermark as its first child
+    body_start = html_content.find("<body")
+    if body_start != -1:
+        body_content_start = html_content.find(">", body_start) + 1
+        html_content = (
+            html_content[:body_content_start] +
+            watermark_html +
+            html_content[body_content_start:]
         )
     else:
-        # If no container class found, wrap the entire content
-        html_content = f'<div class="container">{watermark_html}{html_content}</div>'
+        # If no body tag, insert after first div
+        first_div = html_content.find("<div")
+        if first_div != -1:
+            div_content_start = html_content.find(">", first_div) + 1
+            html_content = (
+                html_content[:div_content_start] +
+                watermark_html +
+                html_content[div_content_start:]
+            )
+        else:
+            # If no div found, prepend to content
+            html_content = watermark_html + html_content
 
     return html_content
 
@@ -193,8 +185,9 @@ class ConversationalFlyerGenerator:
         """
         Generate a flyer
         """
-
+        is_guest = False
         if user_id.startswith('guest_'):
+            is_guest = True
             guest_service = GuestUserService()
             await guest_service.check_design_limit(user_id)
             business_details = """This is a guest user trying to use the flyer generator feature, 
@@ -301,6 +294,9 @@ class ConversationalFlyerGenerator:
         print(f"this is the detail 4444 :: {flyer_in.flyer_type} :: {flyer_in} :: {flyer_in.flyer_type == FlyerType.GENERAL} :: {FlyerType.GENERAL}")
         timestamp = int(datetime.now().timestamp())
         
+        if is_guest:
+            html_content = add_watermark_to_html(html_content)
+
         try:
             # Create flyer record
             flyer_model = FlyerModel(
@@ -790,6 +786,9 @@ class ConversationalFlyerGenerator:
             # Update conversation history
             existing_history = flyer_data.get('conversation_history', [])
             updated_history = existing_history + new_conversations
+
+            if user_id.startswith("guest_"):
+                html_content = add_watermark_to_html(html_content)
 
             # Prepare update data
             updated_flyer_data = {

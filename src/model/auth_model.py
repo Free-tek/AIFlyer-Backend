@@ -1,6 +1,7 @@
 from enum import Enum
 from pydantic import BaseModel
 from typing import Optional, Any, Dict, List, Union
+from src.model.flyer_model import DeviceInfo
 
 class CreateAccountRequest(BaseModel):
     email: str
@@ -101,6 +102,7 @@ class UpdateUserDetailsRequest(BaseModel):
     plan_tier: Optional[str] = None
     email: Optional[str] = None
     phone_number: Optional[str] = None
+    device_info: Optional[DeviceInfo] = None
 
     class Config:
         use_enum_values = True

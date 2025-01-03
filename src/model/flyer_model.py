@@ -82,7 +82,6 @@ class FlyerModel(BaseModel):
         use_enum_values = True
 
 
-# Add this new model for device info
 class DeviceInfo(BaseModel):
     userAgent: str
     language: str
@@ -103,6 +102,8 @@ class FlyerUpdate(BaseModel):
     feedback: Optional[str] = None
     image_url: Optional[str] = None
     flyer_id: str
+    device_info: Optional[DeviceInfo] = None
+
 
 class FlyerDownload(BaseModel):
     url: str

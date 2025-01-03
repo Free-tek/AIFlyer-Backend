@@ -117,6 +117,43 @@ async def update_flyer(
         raise HTTPException(status_code=500, detail="Failed to generate an automatic flyer, please tell me what you'll like to design.")
     
 
+@router.post("/update_flyer_guest")
+async def update_flyer_guest(
+    flyer_update: FlyerUpdate
+):
+    # try:
+
+    guest_service = GuestUserService()
+    guest_user = guest_service.get_guest_user(flyer_update.device_info)
+    user_id = guest_user['user_id']
+    
+    generator = ConversationalFlyerGenerator()
+    result = await generator.process_command(flyer_update, user_id)
+    
+    # Check if result is an exception
+    if isinstance(result, Exception):
+        raise result
+        
+    # Ensure result is a dictionary
+    if not isinstance(result, dict):
+        result = {"flyer": result}
+
+    print(f"result: {result}")
+        
+    return {
+        "message": "Flyer updated successfully",
+        "data": result,
+        "status": "success"
+    }
+        
+    # except HTTPException as he:
+    #     raise HTTPException(status_code=500, detail="Failed to generate an automatic flyer, please tell me what you'll like to design.")
+    # except Exception as e:
+    #     logger.error(f"Error in update_flyer: {str(e)}")
+    #     raise HTTPException(status_code=500, detail="Failed to generate an automatic flyer, please tell me what you'll like to design.")
+    
+
+
 @router.post("/export")
 @version(1)
 async def export_flyer(

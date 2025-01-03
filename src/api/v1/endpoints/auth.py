@@ -83,6 +83,16 @@ async def update_user_details(request: UpdateUserDetailsRequest, user_id: str = 
     update_data = request.model_dump(exclude_unset=True)
     res = AuthCrud.update_user_details(user_id, update_data)
 
+    if request.device_info:
+        print(f"got here 1111")
+        try:
+            guest_service = GuestUserService()
+            await guest_service.transfer_guest_designs(request.device_info, user_id, res["application_id"])
+        except Exception as e:
+            print(f"Error transferring guest designs: {str(e)}")
+    else:
+        print(f"no device info {request}")
+
     if "error" in res:
         raise HTTPException(status_code=400, detail=res["error"])
     
